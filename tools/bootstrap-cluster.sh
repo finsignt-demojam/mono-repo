@@ -13,7 +13,7 @@ set -euo pipefail
 
 # ---- Configurable bits (override via env if you like) ----
 OPERATOR_NAMESPACE="${OPERATOR_NAMESPACE:-openshift-gitops-operator}"
-ARGO_NAMESPACE="${ARGO_NAMESPACE:-openshift-gitops-operator}"
+ARGO_NAMESPACE="${ARGO_NAMESPACE:-openshift-gitops}"
 CATALOG_SOURCE="${CATALOG_SOURCE:-redhat-operators}"
 CATALOG_NAMESPACE="${CATALOG_NAMESPACE:-openshift-marketplace}"
 OPERATOR_PACKAGE="${OPERATOR_PACKAGE:-openshift-gitops-operator}"
@@ -99,24 +99,57 @@ fi
 echo "[INFO] Granting cluster privileges to the Argo CD application-controller..."
 # Primary, current SA name:
 PRIMARY_SA="openshift-gitops-argocd-application-controller"
-# Legacy/alternate names to cover version differences:
-ALT_SAS=("openshift-gitops-app-controller" "openshift-gitops-argocd-application-controller-sa")
 
-grant_privileges() {
-  local sa="$1"
-  if oc -n "${ARGO_NAMESPACE}" get sa "${sa}" >/dev/null 2>&1; then
-    echo " - Granting cluster-admin to serviceaccount/${sa}"
-    oc adm policy add-cluster-role-to-user cluster-admin "system:serviceaccount:${ARGO_NAMESPACE}:${sa}"
-    
-    echo " - Granting edit role to serviceaccount/${sa} (for granular permissions)"
-    oc adm policy add-cluster-role-to-user edit "system:serviceaccount:${ARGO_NAMESPACE}:${sa}"
-  else
-    echo "   [INFO] SA ${sa} not present; skipping."
-  fi
-}
+# Grant cluster-admin role to the ArgoCD application controller
+echo " - Granting cluster-admin to serviceaccount/${PRIMARY_SA}"
+oc adm policy add-cluster-role-to-user cluster-admin \
+  "system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA}"
 
-grant_privileges "${PRIMARY_SA}"
-for s in "${ALT_SAS[@]}"; do grant_privileges "$s"; done
+echo "[INFO] Ensuring target namespace exists for ArgoCD applications..."
+TARGET_NAMESPACE="shakeout-app"
+oc get ns "${TARGET_NAMESPACE}" >/dev/null 2>&1 || oc create ns "${TARGET_NAMESPACE}"
+
+echo "[INFO] Granting ArgoCD controller access to target namespace..."
+oc adm policy add-role-to-user edit \
+  "system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA}" \
+  -n "${TARGET_NAMESPACE}"
+
+echo "[INFO] Verifying permissions were applied correctly..."
+# Check cluster role bindings
+echo " - Checking cluster role bindings for ${PRIMARY_SA}..."
+if oc get clusterrolebindings | grep -q "system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA}"; then
+  echo "   ✓ Cluster role bindings found"
+else
+  echo "   ✗ No cluster role bindings found for ${PRIMARY_SA}"
+fi
+
+# Check namespace role bindings
+echo " - Checking role bindings in ${TARGET_NAMESPACE} namespace..."
+if oc get rolebindings -n "${TARGET_NAMESPACE}" | grep -q "system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA}"; then
+  echo "   ✓ Namespace role bindings found"
+else
+  echo "   ✗ No namespace role bindings found for ${PRIMARY_SA}"
+fi
+
+# Test specific permissions
+echo " - Testing specific resource creation permissions..."
+if oc auth can-i create deployments --as="system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA}" -n "${TARGET_NAMESPACE}" >/dev/null 2>&1; then
+  echo "   ✓ Can create deployments"
+else
+  echo "   ✗ Cannot create deployments"
+fi
+
+if oc auth can-i create services --as="system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA}" -n "${TARGET_NAMESPACE}" >/dev/null 2>&1; then
+  echo "   ✓ Can create services"
+else
+  echo "   ✗ Cannot create services"
+fi
+
+if oc auth can-i create routes --as="system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA}" -n "${TARGET_NAMESPACE}" >/dev/null 2>&1; then
+  echo "   ✓ Can create routes"
+else
+  echo "   ✗ Cannot create routes"
+fi
 
 echo "[INFO] Verifying effective access by listing namespaces using the controller SA token..."
 # (Best-effort sanity check)
@@ -132,5 +165,20 @@ if oc -n "${ARGO_NAMESPACE}" get sa "${PRIMARY_SA}" >/dev/null 2>&1; then
 fi
 
 echo "[DONE] OpenShift GitOps is installed and granted cluster privileges for deploying applications."
+
+echo "[INFO] Troubleshooting tips if ArgoCD sync fails:"
+echo "  If you see permission errors like 'cannot create resource \"deployments\"', try:"
+echo "  1. Check if the service account exists:"
+echo "     oc get sa ${PRIMARY_SA} -n ${ARGO_NAMESPACE}"
+echo "  2. Verify cluster role bindings:"
+echo "     oc get clusterrolebindings | grep ${PRIMARY_SA}"
+echo "  3. Verify namespace role bindings:"
+echo "     oc get rolebindings -n ${TARGET_NAMESPACE} | grep ${PRIMARY_SA}"
+echo "  4. Test specific permissions:"
+echo "     oc auth can-i create deployments --as=system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA} -n ${TARGET_NAMESPACE}"
+echo "  5. If permissions are missing, re-run the permission commands:"
+echo "     oc adm policy add-cluster-role-to-user cluster-admin system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA}"
+echo "     oc adm policy add-role-to-user edit system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA} -n ${TARGET_NAMESPACE}"
+
 echo "[HINT] Console route (SSO):"
 oc -n "${ARGO_NAMESPACE}" get route openshift-gitops-server -o jsonpath='{.spec.host}{"\n"}' 2>/dev/null || true
