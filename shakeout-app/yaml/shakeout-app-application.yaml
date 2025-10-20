@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shakeout-app
+spec:
+  destination:
+    namespace: shakeout-app
+    server: https://kubernetes.default.svc
+  source:
+    path: shakeout-app/overlays/rosa
+    repoURL: https://github.com/finsignt-demojam/mono-repo
+    targetRevision: HEAD
+  sources: []
+  project: default
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false
+      enabled: true
+    syncOptions:
+      - CreateNamespace=true
