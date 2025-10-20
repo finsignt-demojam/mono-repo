@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shakeout-app
+  namespace: openshift-gitops
+spec:
+  destination:
+    name: ''
+    namespace: shakeout-app
+    server: https://kubernetes.default.svc
+  source:
+    path: shakeout-app/overlays/aws
+    repoURL: https://github.com/bryonbaker/openshift-apps
+    targetRevision: main
+  sources: []
+  project: shakeout
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated:
+      prune: false
+      selfHeal: false
+

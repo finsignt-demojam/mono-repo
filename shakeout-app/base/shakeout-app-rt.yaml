@@ -1,0 +1,17 @@
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: shakeout-app-route
+  labels:
+    app: shakeout-app
+spec:
+  path: /hello
+  to:
+    kind: Service
+    name: shakeout-app-service
+    weight: 100
+  port:
+    targetPort: 9000
+  tls:
+    termination: edge
+  wildcardPolicy: None

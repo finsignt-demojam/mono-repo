@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shakeout-app-pvc
+  labels:
+    app: shakeout-app
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Mi
+# Storage classes are left out as they are handled by patches.
+#  storageClassName: lvms-vg1
+#  storageClassName: gp3
+#  storageClassName: ocs-external-storagecluster-cephfs
+
