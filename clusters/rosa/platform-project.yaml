@@ -5,7 +5,7 @@ metadata:
   namespace: openshift-gitops
 spec:
   sourceRepos:
-  - https://github.com/finsignt-demojam/mono-repo\
+  - https://github.com/finsignt-demojam/mono-repo
   clusterResourceWhitelist:
   - group: '*'
     kind: '*'
