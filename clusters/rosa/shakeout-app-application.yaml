@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shakeout-app
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/part-of: shakeout-app
+  annotations:
+    # Ensure this deploys after any future "cluster-basics" bundles if you add them.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: finsight-project
+  source:
+    repoURL: 'https://github.com/finsignt-demojam/mono-repo'
+    targetRevision: main
+    path: shakeout-app/overlays/rosa
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shakeout-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Let Argo create the target namespace for shakeout-app.
+      - CreateNamespace=true
+      # Optional but useful in day-2:
+      - ApplyOutOfSyncOnly=true
+  revisionHistoryLimit: 5
