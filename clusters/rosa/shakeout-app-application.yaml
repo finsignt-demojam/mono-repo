@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/part-of: shakeout-app
   annotations:
     # Ensure this deploys after any future "cluster-basics" bundles if you add them.
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   project: finsight-project
   source:

@@ -3,6 +3,9 @@ kind: AppProject
 metadata:
   name: finsight-project
   namespace: openshift-gitops
+  annotations:
+    # Ensure this project is created before any applications try to deploy
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   sourceRepos:
   - https://github.com/finsignt-demojam/mono-repo
