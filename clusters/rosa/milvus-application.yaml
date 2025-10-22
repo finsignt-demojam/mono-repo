@@ -13,7 +13,7 @@ spec:
   source:
     repoURL: 'https://github.com/finsignt-demojam/mono-repo'
     targetRevision: main
-    path: components/platform/milvus/overlays/rosa
+    path: components/platform/milvus/base
   destination:
     server: https://kubernetes.default.svc
     namespace: milvus
