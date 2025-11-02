@@ -13,7 +13,7 @@ spec:
   source:
     repoURL: 'https://github.com/finsignt-demojam/mono-repo'
     targetRevision: main
-    path: components/platform/nfd-instance/base
+    path: components/platform/nvidia-instance/base
   destination:
     server: https://kubernetes.default.svc
     namespace: nvidia-gpu-operator
@@ -22,7 +22,7 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      # Let Argo create the target namespace for Node Feature Discovery Instance.
+      # Let Argo create the target namespace for NVIDIA Cluster Policy.
       - CreateNamespace=false
       # Optional but useful in day-2:
       - ApplyOutOfSyncOnly=true
