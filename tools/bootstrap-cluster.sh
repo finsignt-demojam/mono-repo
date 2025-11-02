@@ -87,19 +87,24 @@ timeout 300 bash -c '
   done
 '
 TIMEOUT="300s"
-echo "Waiting for all pods in namespace '${OPERATOR_NAMESPACE}' to be ready..."
-if oc wait pod -n "${OPERATOR_NAMESPACE}" --for=condition=Ready --all --timeout="${TIMEOUT}"; then
-    echo "✓ All pods are ready!"
-    exit 0
-else
+echo "[INFO] Waiting for all pods in namespace '${OPERATOR_NAMESPACE}' to be ready..."
+if ! oc wait pod -n "${OPERATOR_NAMESPACE}" --for=condition=Ready --all --timeout="${TIMEOUT}"; then
     echo "✗ Timeout or error waiting for pods"
     exit 1
 fi
+echo "✓ All pods are ready!"
+
+echo "[INFO] Waiting for Argo CD service account to be created..."
+PRIMARY_SA="openshift-gitops-argocd-application-controller"
+timeout 300 bash -c '
+  until oc get sa "'"${PRIMARY_SA}"'" -n "'"${ARGO_NAMESPACE}"'" >/dev/null 2>&1; do
+    echo "Waiting for service account ${PRIMARY_SA} to be created..."
+    sleep 5
+  done
+'
+echo "✓ Service account ${PRIMARY_SA} found"
 
 echo "[INFO] Granting cluster privileges to the Argo CD application-controller..."
-# Primary, current SA name:
-PRIMARY_SA="openshift-gitops-argocd-application-controller"
-
 # Grant cluster-admin role to the ArgoCD application controller
 # cluster-admin includes all permissions including: creating namespaces, deployments,
 # services, routes, and any other resources in any namespace
@@ -114,7 +119,8 @@ oc adm policy add-cluster-role-to-user cluster-admin \
 echo "[INFO] Verifying permissions were applied correctly..."
 # Check cluster role bindings
 echo " - Checking cluster role bindings for ${PRIMARY_SA}..."
-if oc get clusterrolebindings | grep -q "system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA}"; then
+SA_FULL_NAME="system:serviceaccount:${ARGO_NAMESPACE}:${PRIMARY_SA}"
+if oc get clusterrolebindings -o json | jq -e --arg sa "${SA_FULL_NAME}" --arg name "${PRIMARY_SA}" --arg ns "${ARGO_NAMESPACE}" '.items[] | select(.roleRef.name == "cluster-admin") | select(.subjects[]? | (.kind == "ServiceAccount" and .name == $name and .namespace == $ns) or . == $sa)' >/dev/null 2>&1; then
   echo "   ✓ Cluster role bindings found"
 else
   echo "   ✗ No cluster role bindings found for ${PRIMARY_SA}"
