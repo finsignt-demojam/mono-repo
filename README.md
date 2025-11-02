@@ -1,12 +1,16 @@
 # Overview 
 There are two layers in the Git Repo for Argo.
+
 ## Clusters
-This contains the app-of-apps configuration for arrgo
+This contains the app-of-apps configuration for argo
+
 ## Components
 This contains all of the deployments. Under here there are two layers
-### Operators
+
+#### Operators
 Where all of the  operator subscriptions live
-###Platform
+
+#### Platform
 Where the applications and operator instances live
 
 ## Applications
