@@ -18,11 +18,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: openshift-operators
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+    # Manual sync - changes require manual sync from Argo CD UI/CLI
     syncOptions:
-      # Let Argo create the target namespace for Service Mesh Operator.
+      # openshift-operators namespace already exists, don't try to create it
       - CreateNamespace=false
       # Optional but useful in day-2:
       - ApplyOutOfSyncOnly=true
