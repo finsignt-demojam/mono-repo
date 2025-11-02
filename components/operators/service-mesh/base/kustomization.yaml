@@ -2,6 +2,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-#- namespace.yaml
-#- operator-group.yaml
-#- subscription.yaml
+# Note: namespace.yaml is optional since openshift-operators already exists
+# but including it ensures the namespace exists with proper labels/annotations
+- namespace.yaml
+# Note: operator-group.yaml is NOT included because openshift-operators namespace
+# already has the default "global-operators" OperatorGroup. Creating another one
+# causes "Multiple OperatorGroup found in the same namespace" error.
+- subscription.yaml

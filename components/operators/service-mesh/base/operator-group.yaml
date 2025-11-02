@@ -1,8 +1,18 @@
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: openshift-operators
-  namespace: openshift-operators
-spec:
-  upgradeStrategy: Default
+# WARNING: DO NOT INCLUDE THIS FILE IN kustomization.yaml
+# 
+# The openshift-operators namespace already has a default OperatorGroup
+# called "global-operators" created by OpenShift. Creating an additional
+# OperatorGroup in the same namespace causes OLM to fail with:
+# "Multiple OperatorGroup found in the same namespace"
+#
+# This file is kept for reference only. If you need to deploy Service Mesh
+# to a different namespace, you may uncomment and modify this file accordingly.
+#
+#apiVersion: operators.coreos.com/v1
+#kind: OperatorGroup
+#metadata:
+#  name: openshift-operators
+#  namespace: openshift-operators
+#spec:
+#  upgradeStrategy: Default
 
