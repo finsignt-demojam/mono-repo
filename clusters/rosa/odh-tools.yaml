@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: odh-tools
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/part-of: platform
+  annotations:
+    # Ensure this deploys after any future "cluster-basics" bundles if you add them.
+    argocd.argoproj.io/sync-wave: "30"
+spec:
+  project: finsight-project
+  source:
+    repoURL: 'https://github.com/finsignt-demojam/mono-repo'
+    targetRevision: main
+    path: components/platform/odh-tools/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: odh-tools
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Let Argo create the target namespace for ODH Tools.
+      - CreateNamespace=true
+      # Optional but useful in day-2:
+      - ApplyOutOfSyncOnly=true
+  revisionHistoryLimit: 5
