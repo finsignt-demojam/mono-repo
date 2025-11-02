@@ -18,9 +18,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: milvus
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+    # Manual sync - changes require manual sync from Argo CD UI/CLI
     syncOptions:
       # Let Argo create the target namespace for Milvus.
       - CreateNamespace=true
