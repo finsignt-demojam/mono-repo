@@ -1,0 +1,12 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: odh-tec
+spec:
+  to:
+    kind: Service
+    name: odh-tec
+  port:
+    targetPort: http
+  tls:
+    termination: edge
