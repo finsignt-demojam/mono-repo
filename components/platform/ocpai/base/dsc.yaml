@@ -1,5 +1,5 @@
-apiVersion: datasciencecluster.opendatahub.io/v1
 kind: DataScienceCluster
+apiVersion: datasciencecluster.opendatahub.io/v1
 metadata:
   name: default-dsc
   labels:
@@ -12,46 +12,38 @@ spec:
   components:
     codeflare:
       managementState: Managed
-    kserve:
-      nim:
-        managementState: Managed
-      rawDeploymentServiceConfig: Headless
-      serving:
-        ingressGateway:
-          certificate:
-            type: OpenshiftDefaultIngress
-        managementState: Managed
-        name: knative-serving
+    dashboard:
       managementState: Managed
-    modelregistry:
-      registriesNamespace: rhoai-model-registries
+    datasciencepipelines:
       managementState: Managed
     feastoperator:
       managementState: Removed
-    trustyai:
-      eval:
-        lmeval:
-          permitCodeExecution: deny
-          permitOnline: deny
+    kserve:
+      name: knative-serving
       managementState: Managed
-    ray:
-      managementState: Managed
+      defaultDeploymentMode: Serverless 
+      rawDeploymentServiceConfig: Headed 
+      serving:
+        ingressGateway:
+          certificate:
+            secretName: knative-serving-cert 
+            type: OpenshiftDefaultIngress 
+        managementState: Managed
+        name: knative-serving
+    llamastackoperator:
+      managementState: Removed
     kueue:
-      defaultClusterQueueName: default
-      defaultLocalQueueName: default
-      managementState: Managed
-    workbenches:
-      workbenchNamespace: rhods-notebooks
-      managementState: Managed
-    dashboard:
       managementState: Managed
     modelmeshserving:
       managementState: Managed
-    llamastackoperator:
-      managementState: Removed
-    datasciencepipelines:
-      argoWorkflowsControllers:
-        managementState: Managed
+    modelregistry:
+      managementState: Managed
+      registriesNamespace: rhoai-model-registries
+    ray:
+      managementState: Managed
+    workbenches:
       managementState: Managed
     trainingoperator:
+      managementState: Managed
+    trustyai:
       managementState: Managed
