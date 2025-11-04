@@ -1,0 +1,19 @@
+apiVersion: sources.knative.dev/v1
+kind: KafkaSource
+metadata:
+  name: minio-notification-source
+  namespace: finsight-agent
+  annotations:
+    argocd.argoproj.io/sync-wave: "45"
+spec:
+  bootstrapServers:
+    - finsight-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092
+  topics:
+    - minio-bucket-notifications
+  consumerGroup: finsight-pipeline-e2e
+  initialOffset: latest
+  sink:
+    ref:
+      apiVersion: eventing.knative.dev/v1
+      kind: Broker
+      name: default

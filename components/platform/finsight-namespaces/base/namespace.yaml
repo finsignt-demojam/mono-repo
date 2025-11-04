@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: finsight-agent
+  labels:
+    app.kubernetes.io/part-of: finsight-platform
+  annotations:
+    eventing.knative.dev/injection: enabled

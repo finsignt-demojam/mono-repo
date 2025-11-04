@@ -1,0 +1,51 @@
+apiVersion: datasciencepipelinesapplications.opendatahub.io/v1
+kind: DataSciencePipelinesApplication
+metadata:
+  name: finsight-pipelines
+  namespace: finsight-agent
+spec:
+  dspVersion: v2
+  apiServer:
+    deploy: true
+    cacheEnabled: true
+    enableOauth: true
+    enableSamplePipeline: false
+    pipelineStore: database
+    artifactSignedURLExpirySeconds: 60
+    archiveLogs: false
+    autoUpdatePipelineDefaultVersion: true
+    terminateStatus: Cancelled
+    trackArtifacts: true
+    collectMetrics: true
+    injectDefaultScript: true
+  database:
+    disableHealthCheck: false
+    customExtraParams: '{"tls":"false"}'
+    mariaDB:
+      deploy: false
+    externalDB:
+      host: mysql-external.finsight-agent.svc.cluster.local
+      port: "3306"
+      username: mlpipeline
+      pipelineDBName: mlpipeline
+      passwordSecret:
+        name: external-mysql-credentials
+        key: password
+  objectStorage:
+    disableHealthCheck: false
+    minio:
+      deploy: true
+      bucket: mlpipeline
+      image: quay.io/opendatahub/minio:RELEASE.2019-08-14T20-37-41Z-license-compliance
+      pvcSize: 10Gi
+      s3CredentialsSecret:
+        accessKey: accesskey
+        secretKey: secretkey
+        secretName: ds-pipeline-s3-finsight-pipelines
+  persistenceAgent:
+    deploy: true
+    numWorkers: 2
+  scheduledWorkflow:
+    deploy: true
+    cronScheduleTimezone: UTC
+  podToPodTLS: true

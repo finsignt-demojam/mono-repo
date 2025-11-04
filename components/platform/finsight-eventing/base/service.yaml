@@ -1,0 +1,63 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: audio-event-handler
+  namespace: finsight-agent
+  labels:
+    app.kubernetes.io/name: audio-event-handler
+  annotations:
+    autoscaling.knative.dev/minScale: "1"
+    argocd.argoproj.io/sync-wave: "47"
+spec:
+  template:
+    metadata:
+      labels:
+        pipelines.kubeflow.org/v2_component: "true"
+    spec:
+      containers:
+        - image: quay.io/cnuland/finsight-eventhandler:demo-dedupe
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: KFP_ENDPOINT
+              value: https://ml-pipeline.finsight-agent.svc.cluster.local:8888
+            - name: KFP_NAMESPACE
+              value: finsight-agent
+            - name: PIPELINE_NAME
+              value: audio-transcription-pipeline
+            - name: PIPELINE_VERSION_NAME
+              value: audio-pipeline-demo-facts
+            - name: EXPERIMENT_NAME
+              value: Audio Transcription Runs
+            - name: KFP_VERIFY_SSL
+              value: "false"
+            - name: MINIO_ENDPOINT
+              value: http://minio.minio.svc.cluster.local:9000
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: accesskey
+                  optional: true
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: secretkey
+                  optional: true
+            - name: VOXTRAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: voxtral-credentials
+                  key: apiKey
+                  optional: true
+            - name: DEMO_MODE
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 5
