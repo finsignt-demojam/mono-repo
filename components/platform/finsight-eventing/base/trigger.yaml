@@ -1,0 +1,14 @@
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: audio-upload-trigger
+  namespace: finsight-agent
+  annotations:
+    argocd.argoproj.io/sync-wave: "46"
+spec:
+  broker: default
+  subscriber:
+    ref:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      name: audio-event-handler

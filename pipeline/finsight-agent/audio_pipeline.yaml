@@ -1,0 +1,264 @@
+# PIPELINE DEFINITION
+# Name: audio-transcription-pipeline
+# Description: Process earnings call audio: segment, transcribe with Voxtral, embed, and store in Milvus
+# Inputs:
+#    collection_name: str [Default: 'earnings_call_transcripts']
+#    milvus_host: str [Default: 'milvus.finsight-agent.svc.cluster.local']
+#    milvus_port: str [Default: '19530']
+#    s3_access_key: str
+#    s3_bucket: str
+#    s3_endpoint_url: str
+#    s3_key: str
+#    s3_secret_key: str
+#    voxtral_api_key: str
+#    voxtral_api_url: str
+#    voxtral_model: str [Default: 'voxtral-small-24b-2507']
+components:
+  comp-download-and-process-audio:
+    executorLabel: exec-download-and-process-audio
+    inputDefinitions:
+      parameters:
+        collection_name:
+          defaultValue: earnings_call_transcripts
+          isOptional: true
+          parameterType: STRING
+        milvus_host:
+          parameterType: STRING
+        milvus_port:
+          parameterType: STRING
+        s3_access_key:
+          parameterType: STRING
+        s3_bucket:
+          parameterType: STRING
+        s3_endpoint_url:
+          parameterType: STRING
+        s3_key:
+          parameterType: STRING
+        s3_secret_key:
+          parameterType: STRING
+        voxtral_api_key:
+          parameterType: STRING
+        voxtral_api_url:
+          parameterType: STRING
+        voxtral_model:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        transcript_artifact:
+          artifactType:
+            schemaTitle: system.Artifact
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-download-and-process-audio:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - download_and_process_audio
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.13.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef download_and_process_audio(\n    s3_bucket: str,\n    s3_key:\
+          \ str,\n    s3_endpoint_url: str,\n    s3_access_key: str,\n    s3_secret_key:\
+          \ str,\n    voxtral_api_url: str,\n    voxtral_api_key: str,\n    voxtral_model:\
+          \ str,\n    milvus_host: str,\n    milvus_port: str,\n    collection_name:\
+          \ str = \"earnings_call_transcripts\",\n    transcript_artifact: Output[Artifact]\
+          \ = None\n) -> None:\n    \"\"\"\n    Main component that orchestrates the\
+          \ entire audio processing pipeline.\n\n    Steps:\n    1. Download audio\
+          \ file from S3\n    2. Segment audio using OptimizedAudioSegmenter\n   \
+          \ 3. Transcribe segments via Voxtral API\n    4. Generate embeddings\n \
+          \   5. Store in Milvus\n    6. Upload results back to S3\n    \"\"\"\n \
+          \   import boto3\n    import json\n    import logging\n    from pathlib\
+          \ import Path\n\n    # Import pipeline components\n    import sys\n    sys.path.insert(0,\
+          \ '/opt/components')\n\n    from audio_segmenter import OptimizedAudioSegmenter,\
+          \ get_default_segmentation_config\n    from transcription import batch_transcribe_segments,\
+          \ create_complete_transcript, create_transcript_metadata\n    from embedding\
+          \ import store_transcripts_in_milvus\n\n    logging.basicConfig(level=logging.INFO,\
+          \ format='%(asctime)s - %(levelname)s - %(message)s')\n    logger = logging.getLogger(__name__)\n\
+          \n    # Setup working directories\n    work_dir = Path(\"/tmp/audio_processing\"\
+          )\n    work_dir.mkdir(parents=True, exist_ok=True)\n\n    segments_dir =\
+          \ work_dir / \"segments\"\n    segments_dir.mkdir(parents=True, exist_ok=True)\n\
+          \n    # Step 1: Download audio file from S3\n    logger.info(f\"=== STEP\
+          \ 1: Downloading audio from s3://{s3_bucket}/{s3_key} ===\")\n\n    audio_file\
+          \ = work_dir / Path(s3_key).name\n\n    s3_client = boto3.client(\n    \
+          \    's3',\n        endpoint_url=s3_endpoint_url,\n        aws_access_key_id=s3_access_key,\n\
+          \        aws_secret_access_key=s3_secret_key\n    )\n\n    try:\n      \
+          \  s3_client.download_file(s3_bucket, s3_key, str(audio_file))\n       \
+          \ logger.info(f\"Successfully downloaded to {audio_file}\")\n    except\
+          \ Exception as e:\n        logger.error(f\"Failed to download audio: {e}\"\
+          )\n        raise\n\n    # Step 2: Segment audio\n    logger.info(\"=== STEP\
+          \ 2: Segmenting audio ===\")\n\n    segmentation_config = get_default_segmentation_config()\n\
+          \    segmenter = OptimizedAudioSegmenter(segmentation_config, segments_dir)\n\
+          \n    try:\n        segments, sample_rate = segmenter.segment_audio(audio_file)\n\
+          \        logger.info(f\"Segmentation complete: {len(segments)} segments\
+          \ at {sample_rate} Hz\")\n    except Exception as e:\n        logger.error(f\"\
+          Audio segmentation failed: {e}\")\n        raise\n\n    # Step 3: Transcribe\
+          \ segments\n    logger.info(\"=== STEP 3: Transcribing audio segments ===\"\
+          )\n\n    try:\n        successful_transcriptions, failed_transcriptions\
+          \ = batch_transcribe_segments(\n            api_url=voxtral_api_url,\n \
+          \           api_key=voxtral_api_key,\n            segments=segments,\n \
+          \           model=voxtral_model,\n            max_retries=3,\n         \
+          \   show_progress=True\n        )\n\n        logger.info(f\"Transcription\
+          \ complete: {len(successful_transcriptions)} successful, {len(failed_transcriptions)}\
+          \ failed\")\n\n        if not successful_transcriptions:\n            raise\
+          \ RuntimeError(\"No successful transcriptions - pipeline failed\")\n\n \
+          \   except Exception as e:\n        logger.error(f\"Transcription failed:\
+          \ {e}\")\n        raise\n\n    # Step 4: Create complete transcript\n  \
+          \  logger.info(\"=== STEP 4: Creating complete transcript ===\")\n\n   \
+          \ transcript_file = work_dir / f\"{audio_file.stem}_transcript.txt\"\n \
+          \   complete_transcript = create_complete_transcript(\n        successful_transcriptions,\n\
+          \        output_path=transcript_file\n    )\n\n    # Step 5: Generate embeddings\
+          \ and store in Milvus\n    logger.info(\"=== STEP 5: Generating embeddings\
+          \ and storing in Milvus ===\")\n\n    try:\n        milvus_stats = store_transcripts_in_milvus(\n\
+          \            milvus_host=milvus_host,\n            milvus_port=milvus_port,\n\
+          \            collection_name=collection_name,\n            transcriptions=successful_transcriptions,\n\
+          \            audio_filename=audio_file.stem,\n            embedding_model=\"\
+          all-MiniLM-L6-v2\",\n            drop_if_exists=True\n        )\n\n    \
+          \    logger.info(f\"Milvus ingestion stats: {milvus_stats}\")\n    except\
+          \ Exception as e:\n        logger.error(f\"Milvus ingestion failed: {e}\"\
+          )\n        raise\n\n    # Step 6: Upload transcript and segments back to\
+          \ S3\n    logger.info(\"=== STEP 6: Uploading results to S3 ===\")\n\n \
+          \   output_prefix = f\"transcripts/{audio_file.stem}\"\n\n    try:\n   \
+          \     # Upload complete transcript\n        transcript_s3_key = f\"{output_prefix}/transcript.txt\"\
+          \n        s3_client.upload_file(\n            str(transcript_file),\n  \
+          \          s3_bucket,\n            transcript_s3_key\n        )\n      \
+          \  logger.info(f\"Uploaded transcript to s3://{s3_bucket}/{transcript_s3_key}\"\
+          )\n\n        # Upload transcript metadata\n        metadata = create_transcript_metadata(\n\
+          \            successful_transcriptions,\n            audio_file.name,\n\
+          \            sample_rate\n        )\n\n        metadata_file = work_dir\
+          \ / f\"{audio_file.stem}_metadata.json\"\n        with open(metadata_file,\
+          \ 'w') as f:\n            json.dump(metadata, f, indent=2)\n\n        metadata_s3_key\
+          \ = f\"{output_prefix}/metadata.json\"\n        s3_client.upload_file(\n\
+          \            str(metadata_file),\n            s3_bucket,\n            metadata_s3_key\n\
+          \        )\n        logger.info(f\"Uploaded metadata to s3://{s3_bucket}/{metadata_s3_key}\"\
+          )\n\n        # Upload audio segments\n        logger.info(\"Uploading audio\
+          \ segments...\")\n        for segment in segments:\n            segment_path\
+          \ = Path(segment['path'])\n            if segment_path.exists():\n     \
+          \           segment_s3_key = f\"{output_prefix}/segments/{segment['filename']}\"\
+          \n                s3_client.upload_file(\n                    str(segment_path),\n\
+          \                    s3_bucket,\n                    segment_s3_key\n  \
+          \              )\n\n        logger.info(f\"Uploaded {len(segments)} segments\
+          \ to S3\")\n\n    except Exception as e:\n        logger.error(f\"S3 upload\
+          \ failed: {e}\")\n        raise\n\n    # Save transcript artifact for KFP\n\
+          \    if transcript_artifact:\n        with open(transcript_artifact.path,\
+          \ 'w') as f:\n            f.write(complete_transcript)\n\n    logger.info(\"\
+          === PIPELINE COMPLETE ===\")\n    logger.info(f\"Processed audio: {audio_file.name}\"\
+          )\n    logger.info(f\"Total segments: {len(segments)}\")\n    logger.info(f\"\
+          Successful transcriptions: {len(successful_transcriptions)}\")\n    logger.info(f\"\
+          Milvus collection: {collection_name}\")\n    logger.info(f\"Results stored\
+          \ in: s3://{s3_bucket}/{output_prefix}/\")\n\n"
+        image: quay.io/cnuland/finsight-pipeline:latest
+        resources:
+          cpuLimit: 2.0
+          cpuRequest: 1.0
+          memoryLimit: 8.589934592
+          memoryRequest: 4.294967296
+          resourceCpuLimit: '2'
+          resourceCpuRequest: '1'
+          resourceMemoryLimit: 8Gi
+          resourceMemoryRequest: 4Gi
+pipelineInfo:
+  description: 'Process earnings call audio: segment, transcribe with Voxtral, embed,
+    and store in Milvus'
+  name: audio-transcription-pipeline
+root:
+  dag:
+    tasks:
+      download-and-process-audio:
+        cachingOptions: {}
+        componentRef:
+          name: comp-download-and-process-audio
+        inputs:
+          parameters:
+            collection_name:
+              componentInputParameter: collection_name
+            milvus_host:
+              componentInputParameter: milvus_host
+            milvus_port:
+              componentInputParameter: milvus_port
+            s3_access_key:
+              componentInputParameter: s3_access_key
+            s3_bucket:
+              componentInputParameter: s3_bucket
+            s3_endpoint_url:
+              componentInputParameter: s3_endpoint_url
+            s3_key:
+              componentInputParameter: s3_key
+            s3_secret_key:
+              componentInputParameter: s3_secret_key
+            voxtral_api_key:
+              componentInputParameter: voxtral_api_key
+            voxtral_api_url:
+              componentInputParameter: voxtral_api_url
+            voxtral_model:
+              componentInputParameter: voxtral_model
+        retryPolicy:
+          backoffDuration: 30s
+          backoffFactor: 2.0
+          backoffMaxDuration: 3600s
+          maxRetryCount: 2
+        taskInfo:
+          name: Audio Processing Pipeline
+  inputDefinitions:
+    parameters:
+      collection_name:
+        defaultValue: earnings_call_transcripts
+        description: Name for Milvus collection
+        isOptional: true
+        parameterType: STRING
+      milvus_host:
+        defaultValue: milvus.finsight-agent.svc.cluster.local
+        description: Milvus server hostname
+        isOptional: true
+        parameterType: STRING
+      milvus_port:
+        defaultValue: '19530'
+        description: Milvus server port
+        isOptional: true
+        parameterType: STRING
+      s3_access_key:
+        description: S3 access key
+        parameterType: STRING
+      s3_bucket:
+        description: S3 bucket name containing the audio file
+        parameterType: STRING
+      s3_endpoint_url:
+        description: S3/MinIO endpoint URL
+        parameterType: STRING
+      s3_key:
+        description: S3 key (path) to the audio file
+        parameterType: STRING
+      s3_secret_key:
+        description: S3 secret key
+        parameterType: STRING
+      voxtral_api_key:
+        description: API authentication key
+        parameterType: STRING
+      voxtral_api_url:
+        description: Voxtral API endpoint (Scaleway or vLLM)
+        parameterType: STRING
+      voxtral_model:
+        defaultValue: voxtral-small-24b-2507
+        description: Voxtral model name
+        isOptional: true
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.13.0

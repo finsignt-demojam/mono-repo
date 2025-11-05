@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: finsight-platform
+  namespace: openshift-gitops
+spec:
+  generators:
+    - list:
+        elements:
+          - name: finsight-namespaces
+            path: components/platform/finsight-namespaces/base
+            namespace: finsight-agent
+            syncWave: "10"
+          - name: mysql
+            path: components/platform/mysql/base
+            namespace: finsight-agent
+            syncWave: "15"
+          - name: kafka
+            path: components/platform/kafka/base
+            namespace: kafka
+            syncWave: "20"
+          - name: minio
+            path: components/platform/minio/overlays/rosa
+            namespace: minio
+            syncWave: "30"
+          - name: milvus
+            path: components/platform/milvus/base
+            namespace: milvus
+            syncWave: "30"
+          - name: dspa
+            path: components/platform/dspa/base
+            namespace: finsight-agent
+            syncWave: "35"
+          - name: finsight-eventing
+            path: components/platform/finsight-eventing/base
+            namespace: finsight-agent
+            syncWave: "40"
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: openshift-gitops
+      labels:
+        app.kubernetes.io/part-of: finsight-platform
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{syncWave}}'
+    spec:
+      project: finsight-project
+      source:
+        repoURL: https://github.com/finsignt-demojam/mono-repo
+        targetRevision: main
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+      revisionHistoryLimit: 5
